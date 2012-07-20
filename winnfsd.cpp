@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	if (argc == 2) {
+	/*if (argc == 2) {
 		pPath = argv[argc - 1];  //path is the last parameter
 		if (*pPath == '"')
 			++pPath;  //remove head "
@@ -273,12 +273,11 @@ int main(int argc, char *argv[])
 			printf("Please use a path like /exports\n");
 			return 1;
 		}
-	}
-
+	}*/
 
 	g_nUID = g_nGID = 0;
 	g_bLogOn = true;
-	for (int i = 1; i < argc - 1; i++)  //parse parameters
+	for (int i = 1; i < argc; i++)  //parse parameters
 	{
 		if (stricmp(argv[i], "-id") == 0)
 		{
@@ -288,6 +287,64 @@ int main(int argc, char *argv[])
 		else if (stricmp(argv[i], "-log") == 0)
 		{
 			g_bLogOn = stricmp(argv[++i], "off") != 0;
+		}
+		else if (i==argc - 2) {
+			pPath = argv[argc - 2];  //path is before the last parameter
+			if (*pPath == '"')
+				++pPath;  //remove head "
+			if (*(pPath + strlen(pPath) - 1) == '"')
+				*(pPath + strlen(pPath) - 1) = '\0';  //remove tail "
+			if (pPath[0] == '.' && pPath[1] == '\0') {
+				static char path1[MAXPATHLEN];
+				getcwd(path1, MAXPATHLEN);
+				pPath = path1;
+			}
+			else if (pPath[1] != ':' || !((pPath[0] >= 'A' && pPath[0] <= 'Z') || (pPath[0] >= 'a' && pPath[0] <= 'z')))  //check path format
+			{
+				printf("Path format is incorrect.\n");
+				printf("Please use a full path such as C:\\work");
+				return 1;
+			}
+
+			pPathAlias = argv[argc - 1]; //path alias is the last parameter
+			if (*pPathAlias == '"')
+				++pPathAlias;  //remove head "
+			if (*(pPathAlias + strlen(pPathAlias) - 1) == '"')
+				*(pPathAlias + strlen(pPathAlias) - 1) = '\0';  //remove tail "
+			if (pPathAlias[0] != '/')  //check path alias format
+			{
+				printf("Path alias format is incorrect.\n");
+				printf("Please use a path like /exports\n");
+				return 1;
+			}
+			break;
+		}
+		else if (i==argc - 1) {
+			pPath = argv[argc - 1];  //path is the last parameter
+			if (*pPath == '"')
+				++pPath;  //remove head "
+			if (*(pPath + strlen(pPath) - 1) == '"')
+				*(pPath + strlen(pPath) - 1) = '\0';  //remove tail "
+			if (pPath[0] == '.' && pPath[1] == '\0') {
+				static char path1[MAXPATHLEN];
+				getcwd(path1, MAXPATHLEN);
+				pPath = path1;
+			}
+			else if (pPath[1] != ':' || !((pPath[0] >= 'A' && pPath[0] <= 'Z') || (pPath[0] >= 'a' && pPath[0] <= 'z')))  //check path format
+			{
+				printf("Path format is incorrect.\n");
+				printf("Please use a full path such as C:\\work");
+				return 1;
+			}
+			strncpy(m_pPathAlias, pPath, sizeof(m_pPathAlias) - 1);
+			m_pPathAlias[1] = m_pPathAlias[0];  //transform mount path to Windows format
+			m_pPathAlias[0] = '/';
+			for (size_t i = 2; i < strlen(pPath); i++)
+				if (m_pPathAlias[i] == '\\')
+					m_pPathAlias[i] = '/';
+			m_pPathAlias[strlen(pPath)] = '\0';
+			pPathAlias = m_pPathAlias;
+			break;
 		}
 	}
 
