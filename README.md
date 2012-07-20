@@ -3,7 +3,7 @@ WinNFSd_edited
 
 Introduction
 ------------
-* Fork of WinNFSd by vincentgao ([http://sourceforge.net/projects/winnfsd/]).
+* Fork of WinNFSd by vincentgao (http://sourceforge.net/projects/winnfsd/).
 * License: GPL.
 * Runs on all major versions of Windows.
 
