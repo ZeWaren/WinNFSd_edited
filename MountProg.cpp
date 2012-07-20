@@ -28,6 +28,7 @@ typedef void (CMountProg::*PPROC)(void);
 CMountProg::CMountProg() : CRPCProg()
 {
 	m_pExportPath[0] = '\0';
+	m_pPathAlias[0] = '\0';
 	m_nMountNum = 0;
 	memset(m_pClientAddr, 0, sizeof(m_pClientAddr));
 }
@@ -40,10 +41,12 @@ CMountProg::~CMountProg()
 		delete[] m_pClientAddr[i];
 }
 
-void CMountProg::Export(char *path)
+void CMountProg::Export(char *path, char *pathAlias)
 {
 	strncpy(m_pExportPath, path, sizeof(m_pExportPath) - 1);
 	m_pExportPath[sizeof(m_pExportPath) - 1] = '\0';
+	strncpy(m_pPathAlias, pathAlias, sizeof(m_pPathAlias) - 1);
+	m_pPathAlias[sizeof(m_pPathAlias) - 1] = '\0';
 }
 
 int CMountProg::GetMountNumber(void)
@@ -158,21 +161,49 @@ char *CMountProg::GetPath(void)
 {
 	unsigned long i, nSize;
 	static char path[MAXPATHLEN + 1];
+	static char finalPath[MAXPATHLEN + 1];
 
 	m_pInStream->Read(&nSize);
 	if (nSize > MAXPATHLEN)
 		nSize = MAXPATHLEN;
 	m_pInStream->Read(path, nSize);
-	path[0] = path[1];  //transform mount path to Windows format
-	path[1] = ':';
-	for (i = 2; i < nSize; i++)
-		if (path[i] == '/')
-			path[i] = '\\';
-	path[nSize] = '\0';
-	PrintLog(" %s", path);
+
+	//We have the requested path, the local path and its alias
+	//Let's cache the various string sizes
+	size_t windowsPathSize = strlen(m_pExportPath);
+	size_t aliasPathSize = strlen(m_pPathAlias);
+	size_t requestedPathSize = nSize;
+
+	if ((requestedPathSize < windowsPathSize) && (strncmp(path, m_pPathAlias, aliasPathSize) == 0)) {
+	  //The requested path starts with the alias. Let's replace the alias with the real path
+		strncpy(finalPath, m_pExportPath, sizeof(finalPath));
+		strncpy(finalPath+windowsPathSize, path+aliasPathSize, sizeof(finalPath)-windowsPathSize);
+		finalPath[windowsPathSize + requestedPathSize - aliasPathSize] = '\0';
+		for (i = 0; i < requestedPathSize; i++) { //transform path to Windows format
+			if (finalPath[windowsPathSize+i] == '/') {
+				finalPath[windowsPathSize+i] = '\\';
+			}
+		}
+	}
+	else if ((strlen(path) == strlen(m_pPathAlias)) && (strncmp(path, m_pPathAlias, strlen(m_pPathAlias)) == 0)) {
+	  //The requested path IS the alias
+		strncpy(finalPath, m_pExportPath, sizeof(finalPath));
+		finalPath[windowsPathSize] = '\0';
+	}
+	else {
+	  //The requested path does not start with the alias, let's treat it normally
+		strncpy(finalPath, path, sizeof(finalPath));
+		finalPath[0] = finalPath[1];  //transform mount path to Windows format
+		finalPath[1] = ':';
+		for (i = 2; i < nSize; i++)
+			if (finalPath[i] == '/')
+				finalPath[i] = '\\';
+		finalPath[nSize] = '\0';
+	}
+	PrintLog("Final local requested path: %s\n", finalPath);
 
 	if ((nSize & 3) != 0)
 		m_pInStream->Read(&i, 4 - (nSize & 3));  //skip opaque bytes
 
-	return path;
+	return finalPath;
 }

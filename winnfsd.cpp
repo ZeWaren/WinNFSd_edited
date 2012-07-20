@@ -4,6 +4,7 @@
 #include "MountProg.h"
 #include "ServerSocket.h"
 #include "DatagramSocket.h"
+#include <unistd.h>
 #include <stdio.h>
 
 #define SOCKET_NUM 3
@@ -30,10 +31,15 @@ static CMountProg g_MountProg;
 static void printUsage(char *pExe)
 {
 	printf("\n");
-	printf("Usage: %s [-id <uid> <gid>] [-log on | off] <export path>\n", pExe);
+	printf("Usage: %s [-id <uid> <gid>] [-log on | off] <export path> [alias path]\n\n", pExe);
 	printf("For example:\n");
 	printf("On Windows> %s d:\\work\n", pExe);
-	printf("On Linux> mount -t nfs 192.168.12.34:/d/work mount\n");
+	printf("On Linux> mount -t nfs 192.168.12.34:/d/work mount\n\n");
+	printf("For another example:\n");
+	printf("On Windows> %s d:\\work /exports\n", pExe);
+	printf("On Linux> mount -t nfs 192.168.12.34:/exports\n\n");
+	printf("Use \".\" to export the current directory:\n");
+	printf("On Windows> %s . /exports\n", pExe);
 }
 
 static void printLine(void)
@@ -47,6 +53,7 @@ static void printAbout(void)
 	printf("WinNFSd v2.0\n");
 	printf("Network File System server for Windows\n");
 	printf("Copyright (C) 2005 Ming-Yang Kao\n");
+	printf("Edited in 2011 by ZeWaren\n");
 	printLine();
 }
 
@@ -137,7 +144,7 @@ static void inputCommand(void)
 	}
 }
 
-static void start(char *path)
+static void start(char *path, char *pathAlias)
 {
 	int i;
 	CDatagramSocket DatagramSockets[SOCKET_NUM];
@@ -148,7 +155,7 @@ static void start(char *path)
 	g_PortmapProg.Set(PROG_MOUNT, MOUNT_PORT);  //map port for mount
 	g_PortmapProg.Set(PROG_NFS, NFS_PORT);  //map port for nfs
 	g_NFSProg.SetUserID(g_nUID, g_nGID);  //set uid and gid of files
-	g_MountProg.Export(path);  //export path for mount
+	g_MountProg.Export(path, pathAlias);  //export path for mount
 	g_RPCServer.Set(PROG_PORTMAP, &g_PortmapProg);  //program for portmap
 	g_RPCServer.Set(PROG_NFS, &g_NFSProg);  //program for nfs
 	g_RPCServer.Set(PROG_MOUNT, &g_MountProg);  //program for mount
@@ -197,8 +204,9 @@ static void start(char *path)
 
 int main(int argc, char *argv[])
 {
-	int i;
 	char *pPath;
+	char m_pPathAlias[MAXPATHLEN];
+	char *pPathAlias;
 	WSADATA wsaData;
 	
 	printAbout();
@@ -210,21 +218,67 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	pPath = argv[argc - 1];  //path is the last parameter
-	if (*pPath == '"')
-		++pPath;  //remove head "
-	if (*(pPath + strlen(pPath) - 1) == '"')
-		*(pPath + strlen(pPath) - 1) = '\0';  //remove tail "
-	if (pPath[1] != ':' || !((pPath[0] >= 'A' && pPath[0] <= 'Z') || (pPath[0] >= 'a' && pPath[0] <= 'z')))  //check path format
-	{
-		printf("Path format is incorrect.\n");
-		printf("Please use a full path such as C:\\work");
-		return 1;
+	if (argc == 2) {
+		pPath = argv[argc - 1];  //path is the last parameter
+		if (*pPath == '"')
+			++pPath;  //remove head "
+		if (*(pPath + strlen(pPath) - 1) == '"')
+			*(pPath + strlen(pPath) - 1) = '\0';  //remove tail "
+		if (pPath[0] == '.' && pPath[1] == '\0') {
+			static char path1[MAXPATHLEN];
+			getcwd(path1, MAXPATHLEN);
+			pPath = path1;
+		}
+		else if (pPath[1] != ':' || !((pPath[0] >= 'A' && pPath[0] <= 'Z') || (pPath[0] >= 'a' && pPath[0] <= 'z')))  //check path format
+		{
+			printf("Path format is incorrect.\n");
+			printf("Please use a full path such as C:\\work");
+			return 1;
+		}
+		strncpy(m_pPathAlias, pPath, sizeof(m_pPathAlias) - 1);
+		m_pPathAlias[1] = m_pPathAlias[0];  //transform mount path to Windows format
+		m_pPathAlias[0] = '/';
+		for (size_t i = 2; i < strlen(pPath); i++)
+			if (m_pPathAlias[i] == '\\')
+				m_pPathAlias[i] = '/';
+		m_pPathAlias[strlen(pPath)] = '\0';
+		pPathAlias = m_pPathAlias;
 	}
+	else if (argc == 3) {
+		pPath = argv[argc - 2];  //path is before the last parameter
+		if (*pPath == '"')
+			++pPath;  //remove head "
+		if (*(pPath + strlen(pPath) - 1) == '"')
+			*(pPath + strlen(pPath) - 1) = '\0';  //remove tail "
+		if (pPath[0] == '.' && pPath[1] == '\0') {
+			static char path1[MAXPATHLEN];
+			getcwd(path1, MAXPATHLEN);
+			pPath = path1;
+		}
+		else if (pPath[1] != ':' || !((pPath[0] >= 'A' && pPath[0] <= 'Z') || (pPath[0] >= 'a' && pPath[0] <= 'z')))  //check path format
+		{
+			printf("Path format is incorrect.\n");
+			printf("Please use a full path such as C:\\work");
+			return 1;
+		}
+
+		pPathAlias = argv[argc - 1]; //path alias is the last parameter
+		if (*pPathAlias == '"')
+			++pPathAlias;  //remove head "
+		if (*(pPathAlias + strlen(pPathAlias) - 1) == '"')
+			*(pPathAlias + strlen(pPathAlias) - 1) = '\0';  //remove tail "
+		if (pPathAlias[0] != '/')  //check path alias format
+		{
+			printf("Path alias format is incorrect.\n");
+			printf("Please use a path like /exports\n");
+			return 1;
+		}
+	}
+
 
 	g_nUID = g_nGID = 0;
 	g_bLogOn = true;
-	for (i = 1; i < argc - 1; i++)  //parse parameters
+	for (int i = 1; i < argc - 1; i++)  //parse parameters
 	{
 		if (stricmp(argv[i], "-id") == 0)
 		{
@@ -238,7 +292,8 @@ int main(int argc, char *argv[])
 	}
 
 	WSAStartup(0x0101, &wsaData);
-	start(pPath);
+	printf("Starting, path is: %s, path alias is: %s\n", pPath, pPathAlias);
+	start(pPath, pPathAlias);
 	WSACleanup();
 	return 0;
 }

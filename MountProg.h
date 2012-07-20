@@ -10,7 +10,7 @@ class CMountProg : public CRPCProg
 public:
 	CMountProg();
 	virtual ~CMountProg();
-	void Export(char *path);
+	void Export(char *path, char *pathAlias);
 	char *GetClientAddr(int nIndex);
 	int GetMountNumber(void);
 	int Process(IInputStream *pInStream, IOutputStream *pOutStream, ProcessParam *pParam);
@@ -18,6 +18,7 @@ public:
 protected:
 	int m_nMountNum;
 	char m_pExportPath[MAXPATHLEN];
+	char m_pPathAlias[MAXPATHLEN];
 	char *m_pClientAddr[MOUNT_NUM_MAX];
 	IInputStream *m_pInStream;
 	IOutputStream *m_pOutStream;
